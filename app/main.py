@@ -4,10 +4,12 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi import HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.browsing import compare_section, get_section, search_sections
 from app.database import create_tables
 from app.ingestion import get_version_tree, ingest_manual
+from app.selections import create_selection, get_selection
 
 # FastAPI uses this object to create the web application.
 app = FastAPI(
@@ -21,6 +23,16 @@ MANUAL_FILES = {
     "v1": "ct200_manual.pdf",
     "v2": "ct200_manual_v2.pdf",
 }
+
+
+class SelectionRequest(BaseModel):
+    """The version and section IDs to save as one named selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=100)
+    version: str = Field(pattern=r"^v[0-9]+$")
+    node_ids: list[str] = Field(min_length=1)
 
 
 @app.on_event("startup")
@@ -97,3 +109,24 @@ def get_section_changes(section_id: str, from_version: str, to_version: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Versions or section were not found")
     return result
+
+
+@app.post("/selections", status_code=201)
+def save_selection(request: SelectionRequest):
+    """Save a named selection of sections from one imported version."""
+    try:
+        selection_id = create_selection(request.name, request.version, request.node_ids)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return get_selection(selection_id)
+
+
+@app.get("/selections/{selection_id}")
+def read_selection(selection_id: int):
+    """Retrieve a selection and the text snapshots tied to its version."""
+    selection = get_selection(selection_id)
+    if selection is None:
+        raise HTTPException(status_code=404, detail="Selection was not found")
+    return selection

@@ -44,3 +44,38 @@ class ManualSection(Base):
     version = relationship("ManualVersion", back_populates="sections")
     parent = relationship("ManualSection", remote_side=[id], back_populates="children")
     children = relationship("ManualSection", back_populates="parent", order_by="ManualSection.order_index")
+
+
+class SectionSelection(Base):
+    """A named list of sections pinned to one imported manual version."""
+
+    __tablename__ = "section_selections"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    version_id = Column(Integer, ForeignKey("manual_versions.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    version = relationship("ManualVersion")
+    items = relationship("SelectionItem", back_populates="selection", cascade="all, delete-orphan")
+
+
+class SelectionItem(Base):
+    """One selected section and the exact text used when it was selected."""
+
+    __tablename__ = "selection_items"
+    __table_args__ = (
+        UniqueConstraint("selection_id", "position", name="unique_selection_position"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    selection_id = Column(Integer, ForeignKey("section_selections.id"), nullable=False)
+    section_id = Column(Integer, ForeignKey("manual_sections.id"), nullable=False)
+    position = Column(Integer, nullable=False)
+    logical_id = Column(String, nullable=False)
+    section_number = Column(String, nullable=False)
+    text_snapshot = Column(Text, nullable=False)
+    content_hash = Column(String(64), nullable=False)
+
+    selection = relationship("SectionSelection", back_populates="items")
+    section = relationship("ManualSection")
