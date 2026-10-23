@@ -3,12 +3,19 @@
 import json
 import os
 import re
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from app.generation_schemas import TestCaseIdeas
+
+# Load private provider settings from the project root's .env file.
+# Real environment variables already set in PowerShell still take precedence.
+PROJECT_FOLDER = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_FOLDER / ".env")
 
 
 class LLMConfigurationError(Exception):
