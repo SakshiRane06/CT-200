@@ -4,7 +4,7 @@ uvicorn[standard]
 
 # Database and data validation (used in upcoming steps)
 SQLAlchemy>=2.0
-pydantic
+pydantic>=2.0
 
 # PDF text and layout extraction (used in upcoming steps)
 pypdf

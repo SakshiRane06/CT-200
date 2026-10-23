@@ -5,3 +5,4 @@ venv/
 .env
 *.db
 .pytest_cache/
+/data/generated_cases/

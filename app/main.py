@@ -8,6 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.browsing import compare_section, get_section, search_sections
 from app.database import create_tables
+from app.generations import find_generations, get_generation, save_generation
+from app.llm import (
+    InvalidLLMResponse,
+    LLMConfigurationError,
+    LLMRequestError,
+    generate_test_cases,
+)
 from app.ingestion import get_version_tree, ingest_manual
 from app.selections import create_selection, get_selection
 
@@ -130,3 +137,47 @@ def read_selection(selection_id: int):
     if selection is None:
         raise HTTPException(status_code=404, detail="Selection was not found")
     return selection
+
+
+@app.post("/selections/{selection_id}/generate", status_code=201)
+def generate_for_selection(selection_id: int):
+    """Generate and save test cases based on a saved selection."""
+    selection = get_selection(selection_id)
+    if selection is None:
+        raise HTTPException(status_code=404, detail="Selection was not found")
+
+    try:
+        test_cases = generate_test_cases(selection)
+    except LLMConfigurationError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except LLMRequestError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except InvalidLLMResponse as error:
+        # Invalid or incomplete output is not saved as if it were usable.
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    # Every successful request gets its own record, even for the same selection.
+    return save_generation(selection, test_cases)
+
+
+@app.get("/generations/{generation_id}")
+def read_generation(generation_id: str):
+    """Retrieve one saved generation by its unique ID."""
+    record = get_generation(generation_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Generation was not found")
+    return record
+
+
+@app.get("/generations")
+def list_generations(
+    selection_id: int | None = None,
+    node_id: str | None = Query(default=None, min_length=1),
+):
+    """Retrieve generations by exactly one selection ID or node ID."""
+    if (selection_id is None) == (node_id is None):
+        raise HTTPException(
+            status_code=422,
+            detail="Provide exactly one of selection_id or node_id",
+        )
+    return find_generations(selection_id=selection_id, node_id=node_id)
