@@ -3,7 +3,7 @@ fastapi
 uvicorn[standard]
 
 # Database and data validation (used in upcoming steps)
-sqlalchemy
+SQLAlchemy>=2.0
 pydantic
 
 # PDF text and layout extraction (used in upcoming steps)

@@ -4,7 +4,7 @@ A small backend API that will parse the CT-200 manual into a structured, version
 
 ## Current checkpoint
 
-The starter API has a health endpoint at `GET /health` and a first PDF tree endpoint at `GET /documents/v1/tree` or `GET /documents/v2/tree`. The supplied manual PDFs are in `data/`.
+The API has a health endpoint at `GET /health`. Import either manual with `POST /documents/v1/ingest` or `POST /documents/v2/ingest`, then browse the saved tree at `GET /documents/v1/tree` or `GET /documents/v2/tree`. Imported sections and hashes are stored in `ct200.db`.
 
 ## Set up locally
 
@@ -29,10 +29,10 @@ The starter API has a health endpoint at `GET /health` and a first PDF tree endp
 
 4. Open `http://127.0.0.1:8000/health` to check that it is running. The interactive API page is at `http://127.0.0.1:8000/docs`.
 
-## Planned checkpoints
+## Current behavior and planned work
 
-- Improve PDF extraction and section hierarchy handling. The current parser uses the manuals' embedded text and printed font sizes; OCR can be added as a fallback for pages without usable text.
-- Store manual versions and section content in SQLite.
+- The parser uses the manuals' embedded text and printed font sizes. OCR can be added as a fallback for pages without usable text.
+- Each PDF version is saved separately. A section number is the current cross-version matching key; each saved section has a content hash.
 - Add browsing, search, version comparison, and version-pinned selections.
 - Add validated QA test-case generation and staleness reporting.
 - Document design decisions and demonstrate the v1-to-v2 flow.
