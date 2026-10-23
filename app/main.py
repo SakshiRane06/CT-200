@@ -17,6 +17,7 @@ from app.llm import (
 )
 from app.ingestion import get_version_tree, ingest_manual
 from app.selections import create_selection, get_selection
+from app.staleness import check_generation_staleness
 
 # FastAPI uses this object to create the web application.
 app = FastAPI(
@@ -166,6 +167,7 @@ def read_generation(generation_id: str):
     record = get_generation(generation_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Generation was not found")
+    record["staleness"] = check_generation_staleness(record)
     return record
 
 
@@ -180,4 +182,16 @@ def list_generations(
             status_code=422,
             detail="Provide exactly one of selection_id or node_id",
         )
-    return find_generations(selection_id=selection_id, node_id=node_id)
+    records = find_generations(selection_id=selection_id, node_id=node_id)
+    for record in records:
+        record["staleness"] = check_generation_staleness(record)
+    return records
+
+
+@app.get("/generations/{generation_id}/staleness")
+def read_generation_staleness(generation_id: str):
+    """Return only the currentness status of one saved generation."""
+    record = get_generation(generation_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Generation was not found")
+    return check_generation_staleness(record)

@@ -39,7 +39,7 @@ The API has a health endpoint at `GET /health`. Import either manual with `POST 
 - Save a version-pinned selection with `POST /selections`, then retrieve its exact text snapshots with `GET /selections/{selection_id}`.
 - Generate QA test cases for a saved selection with `POST /selections/{selection_id}/generate`.
 - Retrieve saved generations by ID, selection ID, or source node ID.
-- Add staleness reporting.
+- Generation retrieval includes a staleness status, and `GET /generations/{generation_id}/staleness` returns the status by itself.
 
 Generated results are stored as separate JSON files under `data/generated_cases/`. This keeps each generation independent and makes its exact source snapshots easy to inspect. This local JSON store is suitable for the assignment demo; a multi-process production service would need a database-backed document store or shared storage.
 
@@ -51,7 +51,7 @@ $env:LLM_BASE_URL = "https://your-provider.example/v1"
 $env:LLM_MODEL = "your-provider-model"
 ```
 
-The API validates the JSON structure and checks that each case cites a section in the selection. It retries once when the response is malformed or incomplete. If the retry is still invalid, it returns an error and saves no generation. Each successful request creates a separate generation record, including when the same selection is submitted twice.
+The API validates the JSON structure and checks that each case cites a section in the selection. It retries once when the response is malformed or incomplete. If the retry is still invalid, it returns an error and saves no generation. Each successful request creates a separate generation record, including when the same selection is submitted twice. Retrieval compares each saved source hash with the latest imported manual; any text change marks that source as changed, even if the edit is only a wording change.
 
 After importing a manual, create a selection and generate ideas:
 
@@ -73,4 +73,4 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8000/documents/v1/ingest
 Invoke-RestMethod -Method Post http://127.0.0.1:8000/documents/v2/ingest
 ```
 
-Next, add staleness reporting and the decision-focused approach document.
+Next, document the design decisions, known limits, validation process, and required decision log in the approach document.
