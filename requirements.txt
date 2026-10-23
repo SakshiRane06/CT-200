@@ -7,4 +7,4 @@ sqlalchemy
 pydantic
 
 # PDF text and layout extraction (used in upcoming steps)
-pymupdf
+pypdf
