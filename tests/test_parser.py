@@ -1,8 +1,13 @@
 """Checks for the structural quirks found in the supplied manual."""
 
 import unittest
+import tempfile
+from pathlib import Path
+
+from pypdf import PdfWriter
 
 from app.parser import parse_pdf
+from app.parser import UnsupportedPDFError
 
 
 class ManualParserTests(unittest.TestCase):
@@ -47,6 +52,18 @@ class ManualParserTests(unittest.TestCase):
         operation_children = self.sections["3"]["children"]
         operation_numbers = [item["section_number"] for item in operation_children]
         self.assertLess(operation_numbers.index("3.4"), operation_numbers.index("3.3"))
+
+    def test_pdf_without_text_fails_clearly_instead_of_returning_an_empty_tree(self):
+        """A scanned image-only PDF needs OCR, which this version does not have."""
+        with tempfile.TemporaryDirectory() as temp_folder:
+            pdf_path = Path(temp_folder) / "blank.pdf"
+            writer = PdfWriter()
+            writer.add_blank_page(width=200, height=200)
+            with pdf_path.open("wb") as pdf_file:
+                writer.write(pdf_file)
+
+            with self.assertRaisesRegex(UnsupportedPDFError, "does not run OCR"):
+                parse_pdf(pdf_path)
 
 
 if __name__ == "__main__":

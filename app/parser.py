@@ -13,6 +13,10 @@ from pypdf import PdfReader
 SECTION_HEADING = re.compile(r"^(\d+(?:\.\d+)*)(?:\.)?\s+(.+?)\s*$")
 
 
+class UnsupportedPDFError(ValueError):
+    """The PDF does not have enough selectable text for this parser."""
+
+
 @dataclass
 class Section:
     """One section in the manual and its position in the section tree."""
@@ -132,6 +136,11 @@ def parse_pdf(pdf_path: str | Path) -> dict:
         page.extract_text(visitor_text=collect_text)
 
     title, sections = _make_tree(text_parts)
+    if not title or not sections:
+        raise UnsupportedPDFError(
+            "No usable text or numbered sections were found. This version of the parser "
+            "does not run OCR on scanned-image pages."
+        )
     return {
         "title": title,
         "sections": [section.to_dict() for section in sections],

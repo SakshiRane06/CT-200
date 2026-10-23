@@ -29,7 +29,7 @@ The API has a health endpoint at `GET /health`. Import either manual with `POST 
 
 4. Open `http://127.0.0.1:8000/health` to check that it is running. The interactive API page is at `http://127.0.0.1:8000/docs`.
 
-## Current behavior and planned work
+## API overview
 
 - The parser uses the manuals' embedded text and printed font sizes. OCR can be added as a fallback for pages without usable text.
 - Each PDF version is saved separately. A section number is the current cross-version matching key; each saved section has a content hash.
@@ -53,24 +53,37 @@ $env:LLM_MODEL = "your-provider-model"
 
 The API validates the JSON structure and checks that each case cites a section in the selection. It retries once when the response is malformed or incomplete. If the retry is still invalid, it returns an error and saves no generation. Each successful request creates a separate generation record, including when the same selection is submitted twice. Retrieval compares each saved source hash with the latest imported manual; any text change marks that source as changed, even if the edit is only a wording change.
 
-After importing a manual, create a selection and generate ideas:
+## Demonstrate the v1 to v2 traceability flow
+
+Start the server and configure the LLM settings above. Then run these commands in PowerShell. The first generation uses v1 text; importing v2 afterwards lets retrieval report which source sections changed.
 
 ```powershell
+$baseUrl = "http://127.0.0.1:8000"
+
+# Import version 1 and create a selection from its changed battery-life section.
+Invoke-RestMethod -Method Post -Uri "$baseUrl/documents/v1/ingest"
+
 $body = @{
-    name = "Overpressure behavior"
+    name = "Battery life"
     version = "v1"
-    node_ids = @("section-4-1", "section-4-2")
+    node_ids = @("section-2-1-1-1")
 } | ConvertTo-Json
 
-$selection = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/selections -ContentType "application/json" -Body $body
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/selections/$($selection.id)/generate"
+$selection = Invoke-RestMethod -Method Post -Uri "$baseUrl/selections" -ContentType "application/json" -Body $body
+$generation = Invoke-RestMethod -Method Post -Uri "$baseUrl/selections/$($selection.id)/generate"
+
+# Import version 2 only after the generation has been saved.
+Invoke-RestMethod -Method Post -Uri "$baseUrl/documents/v2/ingest"
+
+# The response includes the original source text and its current staleness status.
+$result = Invoke-RestMethod -Method Get -Uri "$baseUrl/generations/$($generation.id)"
+$result.staleness.status
+$result.staleness.sources
 ```
 
-To try the current versioned browse flow after starting the server, import both versions:
+The top-level section list defaults to the latest imported version. To browse a specific imported version, pass its label:
 
 ```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:8000/documents/v1/ingest
-Invoke-RestMethod -Method Post http://127.0.0.1:8000/documents/v2/ingest
+Invoke-RestMethod -Method Get -Uri "$baseUrl/sections"
+Invoke-RestMethod -Method Get -Uri "$baseUrl/sections?version=v1"
 ```
-
-Next, document the design decisions, known limits, validation process, and required decision log in the approach document.

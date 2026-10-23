@@ -11,6 +11,10 @@ from app.models import ManualSection, ManualVersion
 from app.parser import parse_pdf
 
 
+class VersionAlreadyExistsError(ValueError):
+    """A version label is already tied to different PDF content."""
+
+
 def _sha256(value: bytes) -> str:
     """Return a short, standard SHA-256 fingerprint."""
     return hashlib.sha256(value).hexdigest()
@@ -67,7 +71,9 @@ def ingest_manual(version_label: str, pdf_path: str | Path) -> dict:
             # Do not silently replace a version: saved selections may refer to it.
             if existing.pdf_hash == pdf_hash:
                 return {"version": version_label, "sections": len(existing.sections), "already_imported": True}
-            raise ValueError(f"Version {version_label} already exists with different PDF content")
+            raise VersionAlreadyExistsError(
+                f"Version {version_label} already exists with different PDF content"
+            )
 
         version = ManualVersion(
             label=version_label,

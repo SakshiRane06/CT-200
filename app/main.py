@@ -6,7 +6,13 @@ from fastapi import FastAPI
 from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.browsing import compare_section, get_section, search_sections
+from app.browsing import (
+    compare_section,
+    get_section,
+    latest_version_label,
+    list_top_level_sections,
+    search_sections,
+)
 from app.database import create_tables
 from app.generations import find_generations, get_generation, save_generation
 from app.llm import (
@@ -15,7 +21,8 @@ from app.llm import (
     LLMRequestError,
     generate_test_cases,
 )
-from app.ingestion import get_version_tree, ingest_manual
+from app.ingestion import VersionAlreadyExistsError, get_version_tree, ingest_manual
+from app.parser import UnsupportedPDFError
 from app.selections import create_selection, get_selection
 from app.staleness import check_generation_staleness
 
@@ -83,9 +90,23 @@ def import_document(version: str):
 
     try:
         return ingest_manual(version, pdf_path)
-    except ValueError as error:
+    except VersionAlreadyExistsError as error:
         # A version label cannot be reused for a different PDF.
         raise HTTPException(status_code=409, detail=str(error)) from error
+    except UnsupportedPDFError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@app.get("/sections")
+def list_sections(version: str = "latest"):
+    """List top-level sections, defaulting to the latest imported version."""
+    selected_version = latest_version_label() if version == "latest" else version
+    if selected_version is None:
+        raise HTTPException(status_code=404, detail="No manual version has been imported")
+    sections = list_top_level_sections(selected_version)
+    if sections is None:
+        raise HTTPException(status_code=404, detail="Version was not found")
+    return {"version": selected_version, "sections": sections}
 
 
 @app.get("/documents/{version}/sections/{section_id}")

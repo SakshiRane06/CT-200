@@ -8,6 +8,45 @@ from app.database import SessionLocal
 from app.models import ManualSection, ManualVersion
 
 
+def latest_version_label() -> str | None:
+    """Return the most recently imported version label."""
+    with SessionLocal() as session:
+        latest = session.scalar(
+            select(ManualVersion).order_by(ManualVersion.id.desc()).limit(1)
+        )
+        return latest.label if latest else None
+
+
+def list_top_level_sections(version_label: str) -> list[dict] | None:
+    """List just the top-level sections for one imported version."""
+    with SessionLocal() as session:
+        version = session.scalar(
+            select(ManualVersion).where(ManualVersion.label == version_label)
+        )
+        if version is None:
+            return None
+
+        sections = session.scalars(
+            select(ManualSection)
+            .where(
+                ManualSection.version_id == version.id,
+                ManualSection.parent_id.is_(None),
+            )
+            .order_by(ManualSection.order_index)
+        ).all()
+        return [
+            {
+                "id": section.logical_id,
+                "section_number": section.section_number,
+                "heading": section.heading,
+                "level": section.level,
+                "content_hash": section.content_hash,
+                "child_count": len(section.children),
+            }
+            for section in sections
+        ]
+
+
 def _section_dict(section: ManualSection, include_children: bool = True) -> dict:
     """Turn one database row into a JSON-friendly section."""
     children = []
