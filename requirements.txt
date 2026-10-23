@@ -1,0 +1,10 @@
+# The web API
+fastapi
+uvicorn[standard]
+
+# Database and data validation (used in upcoming steps)
+sqlalchemy
+pydantic
+
+# PDF text and layout extraction (used in upcoming steps)
+pymupdf
