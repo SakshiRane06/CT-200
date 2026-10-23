@@ -33,6 +33,16 @@ The API has a health endpoint at `GET /health`. Import either manual with `POST 
 
 - The parser uses the manuals' embedded text and printed font sizes. OCR can be added as a fallback for pages without usable text.
 - Each PDF version is saved separately. A section number is the current cross-version matching key; each saved section has a content hash.
-- Add browsing, search, version comparison, and version-pinned selections.
-- Add validated QA test-case generation and staleness reporting.
-- Document design decisions and demonstrate the v1-to-v2 flow.
+- Browse a saved section with `GET /documents/v1/sections/section-3-2`.
+- Search a saved version with `GET /documents/v1/search?q=battery`.
+- Compare a section across versions with `GET /documents/changes/section-2-1-1-1?from_version=v1&to_version=v2`.
+- Add version-pinned selections and QA test-case generation.
+
+To try the current versioned browse flow after starting the server, import both versions:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/documents/v1/ingest
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/documents/v2/ingest
+```
+
+Next, add version-pinned selections, validated QA test-case generation, staleness reporting, and the decision-focused approach document.

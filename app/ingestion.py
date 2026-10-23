@@ -36,7 +36,7 @@ def _store_section(
         version_id=version_id,
         section_number=section_data["section_number"],
         # The section number is our simple cross-version matching key.
-        logical_id="ct200:" + section_data["section_number"],
+        logical_id="section-" + section_data["section_number"].replace(".", "-"),
         heading=section_data["heading"],
         level=section_data["level"],
         body_text=body_text,

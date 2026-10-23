@@ -3,8 +3,9 @@
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 
+from app.browsing import compare_section, get_section, search_sections
 from app.database import create_tables
 from app.ingestion import get_version_tree, ingest_manual
 
@@ -65,3 +66,34 @@ def import_document(version: str):
     except ValueError as error:
         # A version label cannot be reused for a different PDF.
         raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@app.get("/documents/{version}/sections/{section_id}")
+def get_section_details(version: str, section_id: str):
+    """Get a section, its children, full text, and content hash."""
+    section = get_section(version, section_id)
+    if section is None:
+        raise HTTPException(status_code=404, detail="Version or section was not found")
+    return section
+
+
+@app.get("/documents/{version}/search")
+def search_document(
+    version: str,
+    q: str = Query(min_length=1),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """Search headings and section text in an imported manual version."""
+    results = search_sections(version, q, limit)
+    if results is None:
+        raise HTTPException(status_code=404, detail="Version was not found")
+    return {"version": version, "query": q, "results": results}
+
+
+@app.get("/documents/changes/{section_id}")
+def get_section_changes(section_id: str, from_version: str, to_version: str):
+    """Tell whether a section changed and show a short word-level diff."""
+    result = compare_section(section_id, from_version, to_version)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Versions or section were not found")
+    return result
