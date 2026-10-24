@@ -1,89 +1,131 @@
-# CT-200 Manual Parser
+# CT-200 Manual Parser and QA Traceability API
 
-A small backend API that will parse the CT-200 manual into a structured, versioned tree and help keep generated QA test ideas traceable to their source text.
+This project reads the supplied CT-200 manual PDFs and provides an API for browsing sections, comparing manual versions, and generating QA test ideas linked to their source text.
 
-## Current checkpoint
+## What it does
 
-The API has a health endpoint at `GET /health`. Import either manual with `POST /documents/v1/ingest` or `POST /documents/v2/ingest`, then browse the saved tree at `GET /documents/v1/tree` or `GET /documents/v2/tree`. Imported sections and hashes are stored in `ct200.db`.
+- Imports the supplied v1 and v2 manuals and saves their sections as a tree.
+- Lets you list, browse, and search sections.
+- Compares the same section across manual versions.
+- Saves a selection of manual sections with their original text.
+- Uses an OpenAI-compatible language model API to generate structured QA test ideas for a selection.
+- Tracks whether a generated result refers to text that has changed in the latest imported manual.
 
-## Set up locally
+## Requirements
 
-1. Create and activate a virtual environment:
+- Windows with PowerShell, Python 3.10 or newer, and Git.
+- A provider API key to test QA generation. Groq is the configured example provider; see [LLM setup](#set-up-llm-generation). Other OpenAI-compatible providers can be used by changing the settings in `.env`.
 
-   ```powershell
-   py -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
+## Clone and install
 
-2. Install the project packages:
-
-   ```powershell
-   pip install -r requirements.txt
-   ```
-
-3. Start the API:
-
-   ```powershell
-   uvicorn app.main:app --reload
-   ```
-
-4. Open `http://127.0.0.1:8000/health` to check that it is running. The interactive API page is at `http://127.0.0.1:8000/docs`.
-
-## API overview
-
-- The parser uses the manuals' embedded text and printed font sizes. OCR can be added as a fallback for pages without usable text.
-- Each PDF version is saved separately. A section number is the current cross-version matching key; each saved section has a content hash.
-- Browse a saved section with `GET /documents/v1/sections/section-3-2`.
-- Search a saved version with `GET /documents/v1/search?q=battery`.
-- Compare a section across versions with `GET /documents/changes/section-2-1-1-1?from_version=v1&to_version=v2`.
-- Save a version-pinned selection with `POST /selections`, then retrieve its exact text snapshots with `GET /selections/{selection_id}`.
-- Generate QA test cases for a saved selection with `POST /selections/{selection_id}/generate`.
-- Retrieve saved generations by ID, selection ID, or source node ID.
-- Generation retrieval includes a staleness status, and `GET /generations/{generation_id}/staleness` returns the status by itself.
-
-Generated results are stored as separate JSON files under `data/generated_cases/`. This keeps each generation independent and makes its exact source snapshots easy to inspect. This local JSON store is suitable for the assignment demo; a multi-process production service would need a database-backed document store or shared storage.
-
-Generation uses an OpenAI-compatible chat endpoint. Set these values in the same PowerShell window before starting the API; keep the API key private:
+Run these commands in PowerShell:
 
 ```powershell
-$env:LLM_API_KEY = "your-provider-key"
-$env:LLM_BASE_URL = "https://your-provider.example/v1"
-$env:LLM_MODEL = "your-provider-model"
+git clone https://github.com/SakshiRane06/CT-200.git
+cd CT-200
+py -m venv .venv
+\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-The API validates the JSON structure and checks that each case cites a section in the selection. It retries once when the response is malformed or incomplete. If the retry is still invalid, it returns an error and saves no generation. Each successful request creates a separate generation record, including when the same selection is submitted twice. Retrieval compares each saved source hash with the latest imported manual; any text change marks that source as changed, even if the edit is only a wording change.
+You do not need to activate the virtual environment. Running Python through `.venv\Scripts\python.exe` also works when PowerShell blocks activation scripts.
 
-## Demonstrate the v1 to v2 traceability flow
+## Set up LLM generation
 
-Start the server and configure the LLM settings above. Then run these commands in PowerShell. The first generation uses v1 text; importing v2 afterwards lets retrieval report which source sections changed.
+Importing and browsing the manuals does not need an LLM key. Generating QA cases does.
+
+1. Copy the example settings file and open the local copy:
+
+   ```powershell
+   Copy-Item .env.example .env
+   notepad .env
+   ```
+
+2. Create an API key with your chosen provider. For Groq, use the [Groq API keys page](https://console.groq.com/keys).
+3. Put the key between the quotes for `LLM_API_KEY` in `.env`. Keep the key private. `.env` is ignored by Git and should never be committed.
+4. Save and close the file.
+
+The example `.env` settings use Groq's OpenAI-compatible endpoint and the `openai/gpt-oss-120b` model. Provider availability, model names, and usage limits can change. Check your provider's current documentation if a request is rejected.
+
+## Start the API
+
+From the project folder, run:
 
 ```powershell
-$baseUrl = "http://127.0.0.1:8000"
-
-# Import version 1 and create a selection from its changed battery-life section.
-Invoke-RestMethod -Method Post -Uri "$baseUrl/documents/v1/ingest"
-
-$body = @{
-    name = "Battery life"
-    version = "v1"
-    node_ids = @("section-2-1-1-1")
-} | ConvertTo-Json
-
-$selection = Invoke-RestMethod -Method Post -Uri "$baseUrl/selections" -ContentType "application/json" -Body $body
-$generation = Invoke-RestMethod -Method Post -Uri "$baseUrl/selections/$($selection.id)/generate"
-
-# Import version 2 only after the generation has been saved.
-Invoke-RestMethod -Method Post -Uri "$baseUrl/documents/v2/ingest"
-
-# The response includes the original source text and its current staleness status.
-$result = Invoke-RestMethod -Method Get -Uri "$baseUrl/generations/$($generation.id)"
-$result.staleness.status
-$result.staleness.sources
+\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-The top-level section list defaults to the latest imported version. To browse a specific imported version, pass its label:
+Keep this PowerShell window open while testing. Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) in a browser to use the interactive API page. For each request, expand the endpoint, click **Try it out**, enter the values, then click **Execute**.
+
+Check that the server is running with `GET /health`. A successful response is:
+
+```json
+{"status":"ok"}
+```
+
+## Try the main workflow in the browser
+
+### 1. Import both manuals
+
+Use `POST /documents/{version}/ingest` twice: once with `version` set to `v1`, then with `version` set to `v2`. The PDFs are included in the `data` folder. A repeat import of the same PDF version may report that it was already imported.
+
+### 2. Browse or search the manual
+
+- Use `GET /documents/{version}/tree` to view the full tree for `v1` or `v2`.
+- Use `GET /sections` with `version` set to `v1` or `v2` to list top-level sections.
+- Use `GET /documents/{version}/sections/{section_id}` to inspect a section. For example, use `v1` and `section-2-1-1-1` for the battery-life section.
+- Use `GET /documents/{version}/search` with `version` set to `v1` and `q` set to `battery`.
+- Use `GET /documents/changes/{section_id}` with `section_id` `section-2-1-1-1`, `from_version` `v1`, and `to_version` `v2` to compare battery-life text.
+
+### 3. Save a section selection
+
+Use `POST /selections` with this request body:
+
+```json
+{
+  "name": "Battery life test",
+  "version": "v1",
+  "node_ids": ["section-2-1-1-1"]
+}
+```
+
+Note the `id` returned in the response. Use it as `selection_id` in the next requests.
+
+### 4. Generate QA test ideas
+
+Use `POST /selections/{selection_id}/generate`, entering the selection ID from step 3. A successful response includes a generation ID and structured test cases. Each case should cite a section from the selection.
+
+Generated cases are AI suggestions. Review their steps and expected results against the manual before using or presenting them. The API checks the output structure and source IDs; it cannot guarantee the cases are clinically complete or correct.
+
+### 5. Check saved output and staleness
+
+- Use `GET /generations/{generation_id}` to retrieve a saved generation.
+- Use `GET /generations/{generation_id}/staleness` to see whether its source text changed in the latest imported manual.
+- Use `GET /generations` with either `selection_id` or `node_id` to list matching generations. Supply exactly one of those filters.
+
+Because both manuals are imported before generating the v1 selection, a battery-life generation is expected to be reported as stale against v2 if that section's text differs.
+
+## Run the automated checks
+
+In a second PowerShell window from the project folder, run:
 
 ```powershell
-Invoke-RestMethod -Method Get -Uri "$baseUrl/sections"
-Invoke-RestMethod -Method Get -Uri "$baseUrl/sections?version=v1"
+\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+The tests cover known PDF structure edge cases, generated-response validation, and staleness classification. They use a mocked LLM response and do not require a provider key.
+
+## Files and local data
+
+- `app/` contains the API, parser, storage, and generation code.
+- `data/ct200_manual.pdf` and `data/ct200_manual_v2.pdf` are the supplied input manuals.
+- `ct200.db` is created locally to store imported versions, sections, and selections.
+- Generated QA responses are saved under `data/generated_cases/`.
+- `APPROACH.md` describes the parsing and traceability decisions in more detail.
+
+## Known limitations
+
+- The parser is designed for the two supplied manuals, not arbitrary PDFs.
+- OCR is not implemented, so image-only scanned PDFs are unsupported.
+- Section numbers are used to match sections across versions. A renumbered section may appear as removed and added.
+- Any source text change marks a generation stale, even if the change is minor.
+- Generated QA cases need human review before use.
