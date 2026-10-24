@@ -56,6 +56,9 @@ def _call_provider(api_key: str, base_url: str, model: str, messages: list[dict]
         headers={
             "Authorization": "Bearer " + api_key,
             "Content-Type": "application/json",
+            # Groq's edge blocks urllib's default Python-urllib user agent.
+            # Use a clear app-specific name for requests from this API.
+            "User-Agent": "CT-200-Manual-Parser/0.1",
         },
         method="POST",
     )
